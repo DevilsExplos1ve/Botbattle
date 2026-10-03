@@ -48,9 +48,10 @@ PARAMS = {
     "attack_ratio": 1.6,    # attack when my_army > ratio * opp_army
     "attack_min": 150.0,    # ... and my_army above this
     "rush_turn": 700.0,     # start the deathtouch push at this turn
-    "def_radius": 5.0,      # threats within this BFS distance of general
+    "def_radius": 7.0,      # threats within this BFS distance of general
     "def_margin": 2.0,      # threat if enemy army + margin >= general army
-    "gen_keep": 0.0,        # fraction of general army to keep home (via split)
+    "gen_hold_turn": 120.0, # after this turn the general only sends half its army
+    "intercept_slack": 3.0, # interceptor may be this much farther than the threat
 }
 
 DIRS = ((-1, 0), (1, 0), (0, -1), (0, 1))
@@ -179,6 +180,20 @@ class Brain:
                 return [0, best[1], best[2], best[3], 0]
             danger = (turn >= 760 and dd <= 3) or (ea + P["def_margin"] >= A[gr][gc] and dd <= P["def_radius"])
             if danger:
+                # intercept with an army that can beat the threat
+                tdist = self.bfs([(er, ec)], passable)
+                inter = None
+                for (r, c) in mine:
+                    a = A[r][c]
+                    if a - 1 > ea and (r, c) != gen and tdist[r][c] <= dd + P["intercept_slack"]:
+                        k = (tdist[r][c], -a)
+                        if inter is None or k < inter[0]:
+                            inter = (k, r, c)
+                if inter is not None:
+                    _, r, c = inter
+                    for d, nr, nc in self.nbrs(r, c):
+                        if tdist[nr][nc] < tdist[r][c] and (O[nr][nc] == 1 or A[r][c] - 1 > A[nr][nc]):
+                            return [0, r, c, d, 0]
                 mv = self.gather_move(mine, A, O, gdist, gen, exclude_gen=True)
                 if mv is not None:
                     return mv
@@ -244,8 +259,11 @@ class Brain:
             a = A[r][c]
             if a < 2:
                 continue
-            moved = a - 1
             is_gen = (r, c) == gen
+            split = 1 if (is_gen and turn >= P["gen_hold_turn"]) else 0
+            moved = a // 2 if split else a - 1
+            if moved < 1:
+                continue
             for d, nr, nc in self.nbrs(r, c):
                 if blocked[nr][nc]:
                     continue
@@ -283,9 +301,9 @@ class Brain:
                     if is_gen and turn >= 700:
                         s -= 5.0
                 if best is None or s > best[0]:
-                    best = (s, r, c, d)
+                    best = (s, r, c, d, split)
         if best is not None:
-            return [0, best[1], best[2], best[3], 0]
+            return [0, best[1], best[2], best[3], best[4]]
         return [1, 0, 0, 0, 0]
 
     # ------------------------------------------------------------------
@@ -305,7 +323,7 @@ class Brain:
                 continue
             for d, nr, nc in self.nbrs(r, c):
                 if O[nr][nc] == 1 and dist[nr][nc] < dist[r][c]:
-                    s = (a - 1) / (1.0 + dist[r][c])
+                    s = (a - 1) - 0.5 * dist[r][c]
                     if best is None or s > best[0]:
                         best = (s, r, c, d)
         if best is None:
@@ -364,7 +382,16 @@ _brain = None
 def act(observation):
     global _brain
     try:
-        H, W = observation["height"], observation["width"]
+        H, W = int(observation["height"]), int(observation["width"])
+        obs = dict(observation)
+        for k in ("type", "owner", "army"):
+            g = obs[k]
+            if hasattr(g, "tolist"):
+                g = g.tolist()
+            if len(g) == H * W and not isinstance(g[0], (list, tuple)):
+                g = [list(g[r * W:(r + 1) * W]) for r in range(H)]
+            obs[k] = g
+        observation = obs
         if _brain is None or _brain.H != H or _brain.W != W or observation["turn"] < _brain.last_turn:
             _brain = Brain(H, W)
         _brain.last_turn = observation["turn"]

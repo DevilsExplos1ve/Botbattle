@@ -1,8 +1,8 @@
 """Evolution-strategies (OpenAI-ES style) policy search for bot.py's PARAMS.
 
 Reward per game: win = 1 + 0.25*(1 - turns/1200) (faster wins better),
-draw = 0.4, loss = 0. Opponents: the frozen current champion (self-play) and
-the organizer expander. Antithetic gaussian perturbations in log/relative
+draw = 0.4, loss = 0. Opponents: the frozen current champion (self-play), an all-in
+aggressor variant of the bot, and the organizer expander. Antithetic gaussian perturbations in log/relative
 space, rank-normalised fitness, Adam-free plain gradient ascent.
 Writes the best parameters to tools/params_best.json after every generation.
 """
@@ -11,7 +11,7 @@ from multiprocessing import Pool
 
 BOT = os.path.abspath("bot.py")
 EXP = os.path.abspath("tools/expander.py")
-KEYS_INT_SAFE = None
+AGG = {"attack_ratio": 0.0, "attack_min": 0.0, "castle_max": 0.0}
 
 def init_worker():
     global arena
@@ -58,9 +58,11 @@ def main():
         seeds = [seed_ctr + i for i in range(3)]; seed_ctr += 3
         jobs = []
         for ci, c in enumerate(cands):
-            for s in seeds:
+            for s in seeds[:2]:
                 for sw in (0, 1):
                     jobs.append((c, champion, BOT, s, sw))
+            for sw in (0, 1):
+                jobs.append((c, AGG, BOT, seeds[2] + 777, sw))
             jobs.append((c, None, EXP, seeds[0], ci % 2))
         res = pool.map(run_game, jobs)
         per = len(jobs) // len(cands)

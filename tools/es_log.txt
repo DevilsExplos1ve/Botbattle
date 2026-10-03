@@ -1,0 +1,3 @@
+gen 0 mean_fit 0.604 best 0.742 46s
+gen 1 mean_fit 0.654 best 0.867 47s
+gen 2 mean_fit 0.537 best 0.743 54s
