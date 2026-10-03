@@ -34,24 +34,24 @@ from collections import deque
 
 # ---- learned parameters (overwritten by the ES trainer) -------------------
 PARAMS = {
-    'attack_min': 44.9737,
-    'attack_ratio': 0.5257,
-    'castle_gen_dist': 3.8155,
-    'castle_max': 6.7967,
-    'castle_safe': 2.743,
-    'castle_start': 32.9207,
-    'def_margin': 2.3849,
-    'def_radius': 4.344,
-    'gen_hold_turn': 164.6497,
-    'intercept_slack': 4.4644,
-    'rush_turn': 660.2708,
-    'w_enemy': 18.1933,
-    'w_enemy_army': 0.1257,
-    'w_far': 0.1197,
-    'w_fog': 4.6324,
-    'w_gather': 0.2566,
-    'w_neutral': 16.8603,
-    'w_small': 0.0341,
+    "w_neutral": 10.0,      # capture visible neutral tile
+    "w_fog": 7.0,           # step into fog (exploration)
+    "w_enemy": 14.0,        # capture enemy tile
+    "w_enemy_army": 0.15,   # per enemy army destroyed
+    "w_gather": 0.35,       # per army unit moved one step closer to gather target
+    "w_far": 0.25,          # expansion bonus per BFS step away from own general
+    "w_small": 0.04,        # penalty per army used for a plain expansion
+    "castle_start": 18.0,   # first turn castles may be built
+    "castle_max": 9.0,      # max castles to build
+    "castle_safe": 4.0,     # min BFS distance from seen enemy for a site
+    "castle_gen_dist": 3.0, # preferred site distance from general
+    "attack_ratio": 1.6,    # attack when my_army > ratio * opp_army
+    "attack_min": 150.0,    # ... and my_army above this
+    "rush_turn": 700.0,     # start the deathtouch push at this turn
+    "def_radius": 7.0,      # threats within this BFS distance of general
+    "def_margin": 2.0,      # threat if enemy army + margin >= general army
+    "gen_hold_turn": 120.0, # after this turn the general only sends half its army
+    "intercept_slack": 3.0, # interceptor may be this much farther than the threat
 }
 
 DIRS = ((-1, 0), (1, 0), (0, -1), (0, 1))
@@ -237,6 +237,7 @@ class Brain:
 
         # ---- 4. target for pressure --------------------------------
         target = self.enemy_gen or self.guess_enemy_gen(gen, gdist, T)
+        self.dbg_target = target
         attack = False
         if target is not None:
             if turn >= P["rush_turn"]:
